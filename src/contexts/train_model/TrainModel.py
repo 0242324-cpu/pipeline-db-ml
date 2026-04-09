@@ -5,30 +5,27 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 
-
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+
 
 class TrainModel:
 
     def entrenarModelo():
 
-        #se usaron las credeciales para ingresar de manera ocacional (Transaction pooler)
         load_dotenv("/app/.env")
         USER = os.getenv("SUPABASE_USER")
         PASSWORD = os.getenv("SUPABASE_PASSWORD")
         HOST = os.getenv("SUPABASE_HOST")
         PORT = os.getenv("SUPABASE_PORT")
         DBNAME = os.getenv("SUPABASE_DBNAME")
-        
 
-        if(PORT== None):
+        if PORT is None:
             print("no se lee el env")
             return
         else:
-            print("si se lee en env")
-
+            print("si se lee el env")
 
         try:
             with psycopg2.connect(
@@ -39,37 +36,44 @@ class TrainModel:
                 dbname=DBNAME
             ) as connection:
                 with connection.cursor() as cursor:
-                    # Consulta SQL
-                    cursor.execute('SELECT x, y FROM "Dataset";')
-                    rows = cursor.fetchall()  # devuelve una lista de tuplas [(x1,y1),(x2,y2),...]
-                    
+                    cursor.execute('SELECT email, country, city, genre FROM "Dataset";')
+                    rows = cursor.fetchall()
                     print(f"Filas recuperadas: {len(rows)}")
 
         except Exception as e:
             print(f"Error al conectar o recuperar datos: {e}")
             return
-        
+
         if not rows:
-            print("No se recuperaron filas de la base de datos. Abortando entrenamiento.")
+            print("No se recuperaron filas. Abortando entrenamiento.")
             return
-        else:
-            print(rows[:2])
-            
 
-        # Convertir la lista de tuplas a un array de NumPy
-        data_array = np.array(rows)  # shape (num_filas, 2)
+        # Convertir a DataFrame
+        df = pd.DataFrame(rows, columns=["email", "country", "city", "genre"])
 
-        # Separar columnas
-        x = data_array[:, 0].reshape(-1, 1)  # 100 x 1
-        y = data_array[:, 1].reshape(-1, 1)  # 100 x 1
+        # Separar X y Y
+        X = df[["email", "country", "city"]].values
+        y = df["genre"].values
 
-        #dividir en entranamiento y prueba
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
-        
-        #entrenar el modelo
-        
-        model = LinearRegression()
-        model.fit(x_train, y_train)
-        joblib.dump(model, str(os.getenv("MODELO_ENTRENADO")))
-        print("modelo entrenado")
-        
+        # Encoders
+        encoder = OrdinalEncoder()
+        X_encoded = encoder.fit_transform(X)
+
+        label_encoder = LabelEncoder()
+        y_encoded = label_encoder.fit_transform(y)
+
+        # Dividir en entrenamiento y prueba
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_encoded, y_encoded, test_size=0.2, random_state=42
+        )
+
+        # Entrenar modelo clasificador
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+
+        # Guardar los 3 archivos
+        joblib.dump(model, os.getenv("MODELO_ENTRENADO"))
+        joblib.dump(encoder, os.getenv("ENCODER_ENTRENADO"))
+        joblib.dump(label_encoder, os.getenv("LABEL_ENCODER_ENTRENADO"))
+
+        print("✅ Modelo, encoder y label_encoder guardados correctamente")
