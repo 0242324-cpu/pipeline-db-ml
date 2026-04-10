@@ -36,7 +36,7 @@ class TrainModel:
                 dbname=DBNAME
             ) as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute('SELECT email, country, city, genre FROM "Dataset";')
+                    cursor.execute('SELECT email, country, city, genre FROM public.train_model;')
                     rows = cursor.fetchall()
                     print(f"Filas recuperadas: {len(rows)}")
 
